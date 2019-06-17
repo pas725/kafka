@@ -25,12 +25,7 @@ import java.util.Iterator;
 
 public abstract class AbstractRecords implements Records {
 
-    private final Iterable<Record> records = new Iterable<Record>() {
-        @Override
-        public Iterator<Record> iterator() {
-            return recordsIterator();
-        }
-    };
+    private final Iterable<Record> records = this::recordsIterator;
 
     @Override
     public boolean hasMatchingMagic(byte magic) {
@@ -46,6 +41,15 @@ public abstract class AbstractRecords implements Records {
             if (batch.magic() > magic)
                 return false;
         return true;
+    }
+
+    public boolean firstBatchHasCompatibleMagic(byte magic) {
+        Iterator<? extends RecordBatch> iterator = batches().iterator();
+
+        if (!iterator.hasNext())
+            return true;
+
+        return iterator.next().magic() <= magic;
     }
 
     /**

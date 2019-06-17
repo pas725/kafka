@@ -26,7 +26,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,6 +35,7 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
 import static java.util.Collections.singleton;
@@ -66,16 +66,17 @@ public class DeadLetterQueueReporter implements ErrorReporter {
 
     private final SinkConnectorConfig connConfig;
     private final ConnectorTaskId connectorTaskId;
+    private final ErrorHandlingMetrics errorHandlingMetrics;
 
     private KafkaProducer<byte[], byte[]> kafkaProducer;
-    private ErrorHandlingMetrics errorHandlingMetrics;
 
-    public static DeadLetterQueueReporter createAndSetup(WorkerConfig workerConfig,
+    public static DeadLetterQueueReporter createAndSetup(Map<String, Object> adminProps,
                                                          ConnectorTaskId id,
-                                                         SinkConnectorConfig sinkConfig, Map<String, Object> producerProps) {
+                                                         SinkConnectorConfig sinkConfig, Map<String, Object> producerProps,
+                                                         ErrorHandlingMetrics errorHandlingMetrics) {
         String topic = sinkConfig.dlqTopicName();
 
-        try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
+        try (AdminClient admin = AdminClient.create(adminProps)) {
             if (!admin.listTopics().names().get().contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
                 NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());
@@ -90,7 +91,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         }
 
         KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
-        return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id);
+        return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id, errorHandlingMetrics);
     }
 
     /**
@@ -99,14 +100,16 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param kafkaProducer a Kafka Producer to produce the original consumed records.
      */
     // Visible for testing
-    DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer, SinkConnectorConfig connConfig, ConnectorTaskId id) {
+    DeadLetterQueueReporter(KafkaProducer<byte[], byte[]> kafkaProducer, SinkConnectorConfig connConfig,
+                            ConnectorTaskId id, ErrorHandlingMetrics errorHandlingMetrics) {
+        Objects.requireNonNull(kafkaProducer);
+        Objects.requireNonNull(connConfig);
+        Objects.requireNonNull(id);
+        Objects.requireNonNull(errorHandlingMetrics);
+
         this.kafkaProducer = kafkaProducer;
         this.connConfig = connConfig;
         this.connectorTaskId = id;
-    }
-
-    @Override
-    public void metrics(ErrorHandlingMetrics errorHandlingMetrics) {
         this.errorHandlingMetrics = errorHandlingMetrics;
     }
 
@@ -195,6 +198,10 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     }
 
     private byte[] toBytes(String value) {
-        return value.getBytes(StandardCharsets.UTF_8);
+        if (value != null) {
+            return value.getBytes(StandardCharsets.UTF_8);
+        } else {
+            return null;
+        }
     }
 }

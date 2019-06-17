@@ -36,45 +36,42 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamFlatMapTest {
-
-    private String topicName = "topic";
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+    private final ConsumerRecordFactory<Integer, String> recordFactory =
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testFlatMap() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String topicName = "topic";
 
-        KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
-            new KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>>() {
-                @Override
-                public Iterable<KeyValue<String, String>> apply(Number key, Object value) {
-                    ArrayList<KeyValue<String, String>> result = new ArrayList<>();
-                    for (int i = 0; i < key.intValue(); i++) {
-                        result.add(KeyValue.pair(Integer.toString(key.intValue() * 10 + i), value.toString()));
-                    }
-                    return result;
+        final KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
+            (key, value) -> {
+                final ArrayList<KeyValue<String, String>> result = new ArrayList<>();
+                for (int i = 0; i < key.intValue(); i++) {
+                    result.add(KeyValue.pair(Integer.toString(key.intValue() * 10 + i), value.toString()));
                 }
+                return result;
             };
 
         final int[] expectedKeys = {0, 1, 2, 3};
 
-        KStream<Integer, String> stream;
-        MockProcessorSupplier<String, String> supplier;
+        final KStream<Integer, String> stream;
+        final MockProcessorSupplier<String, String> supplier;
 
         supplier = new MockProcessorSupplier<>();
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.flatMap(mapper).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            for (int expectedKey : expectedKeys) {
+            for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
             }
         }
 
         assertEquals(6, supplier.theCapturedProcessor().processed.size());
 
-        String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
+        final String[] expected = {"10:V1 (ts: 0)", "20:V2 (ts: 0)", "21:V2 (ts: 0)", "30:V3 (ts: 0)", "31:V3 (ts: 0)", "32:V3 (ts: 0)"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
