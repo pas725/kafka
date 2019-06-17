@@ -21,7 +21,6 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -31,6 +30,7 @@ import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.header.Header;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
@@ -242,7 +242,7 @@ class WorkerSourceTask extends WorkerTask {
     protected List<SourceRecord> poll() throws InterruptedException {
         try {
             return task.poll();
-        } catch (RetriableException e) {
+        } catch (RetriableException | org.apache.kafka.common.errors.RetriableException e) {
             log.warn("{} failed to poll records from SourceTask. Will retry operation.", this, e);
             // Do nothing. Let the framework poll whenever it's ready.
             return null;
@@ -326,11 +326,11 @@ class WorkerSourceTask extends WorkerTask {
                                     // timeouts, callbacks with exceptions should never be invoked in practice. If the
                                     // user overrode these settings, the best we can do is notify them of the failure via
                                     // logging.
-                                    log.error("{} failed to send record to {}: {}", this, topic, e);
-                                    log.debug("{} Failed record: {}", this, preTransformRecord);
+                                    log.error("{} failed to send record to {}: {}", WorkerSourceTask.this, topic, e);
+                                    log.debug("{} Failed record: {}", WorkerSourceTask.this, preTransformRecord);
                                 } else {
                                     log.trace("{} Wrote record successfully: topic {} partition {} offset {}",
-                                            this,
+                                            WorkerSourceTask.this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
                                     commitTaskRecord(preTransformRecord);
@@ -340,7 +340,7 @@ class WorkerSourceTask extends WorkerTask {
                             }
                         });
                 lastSendFailed = false;
-            } catch (RetriableException e) {
+            } catch (org.apache.kafka.common.errors.RetriableException e) {
                 log.warn("{} Failed to send {}, backing off before retrying:", this, producerRecord, e);
                 toSend = toSend.subList(processed, toSend.size());
                 lastSendFailed = true;
@@ -454,9 +454,9 @@ class WorkerSourceTask extends WorkerTask {
             @Override
             public void onCompletion(Throwable error, Void result) {
                 if (error != null) {
-                    log.error("{} Failed to flush offsets to storage: ", this, error);
+                    log.error("{} Failed to flush offsets to storage: ", WorkerSourceTask.this, error);
                 } else {
-                    log.trace("{} Finished flushing offsets to storage", this);
+                    log.trace("{} Finished flushing offsets to storage", WorkerSourceTask.this);
                 }
             }
         });

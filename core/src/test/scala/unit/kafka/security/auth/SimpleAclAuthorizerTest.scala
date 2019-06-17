@@ -93,6 +93,19 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testAuthorizeWithEmptyResourceName(): Unit = {
+    assertFalse(simpleAclAuthorizer.authorize(session, Read, Resource(Group, "", LITERAL)))
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Group, WildCardResource, LITERAL))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Group, "", LITERAL)))
+  }
+
+  // Authorizing the empty resource is not supported because we create a znode with the resource name.
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEmptyAclThrowsException(): Unit = {
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Group, "", LITERAL))
+  }
+
+  @Test
   def testTopicAcl() {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
@@ -614,6 +627,18 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), prefixedResource)
 
     assertTrue(simpleAclAuthorizer.authorize(session, Read, resource))
+  }
+
+  @Test
+  def testSingleCharacterResourceAcls(): Unit = {
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Topic, "f", LITERAL))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "f", LITERAL)))
+    assertFalse(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "foo", LITERAL)))
+
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Topic, "_", PREFIXED))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "_foo", LITERAL)))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "_", LITERAL)))
+    assertFalse(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "foo_", LITERAL)))
   }
 
   @Test

@@ -53,6 +53,7 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -163,7 +164,8 @@ public abstract class AbstractJoinIntegrationTest {
 
     @After
     public void cleanup() throws InterruptedException {
-        CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
+        producer.close(0, TimeUnit.MILLISECONDS);
+        CLUSTER.deleteAllTopicsAndWait(120000);
     }
 
     private void checkResult(final String outputTopic, final List<String> expectedResult) throws InterruptedException {

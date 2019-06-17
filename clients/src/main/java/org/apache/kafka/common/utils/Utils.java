@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -512,6 +513,19 @@ public final class Utils {
         return bld.toString();
     }
 
+    public static Map<String, String> parseMap(String mapStr, String keyValueSeparator, String elementSeparator) {
+        Map<String, String> map = new HashMap<>();
+
+        if (!mapStr.isEmpty()) {
+            String[] attrvals = mapStr.split(elementSeparator);
+            for (String attrval : attrvals) {
+                String[] array = attrval.split(keyValueSeparator, 2);
+                map.put(array[0], array[1]);
+            }
+        }
+        return map;
+    }
+
     /**
      * Read a properties file from the given path
      * @param filename The path of the file to read
@@ -815,6 +829,18 @@ public final class Utils {
             }
         }
     }
+
+    public static void closeQuietly(AutoCloseable closeable, String name, AtomicReference<Throwable> firstException) {
+        if (closeable != null) {
+            try {
+                closeable.close();
+            } catch (Throwable t) {
+                firstException.compareAndSet(null, t);
+                log.error("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
+            }
+        }
+    }
+
 
     /**
      * A cheap way to deterministically convert a number to a positive value. When the input is
